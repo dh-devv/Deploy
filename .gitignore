@@ -1,1 +1,9 @@
 src/uploads/*
+.env
+.env.*
+!.env.example
+.local-tests/
+.local-backups/
+tests/__pycache__/
+# This is a separate clone, not part of this application.
+php-board/

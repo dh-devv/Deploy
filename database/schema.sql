@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS php_board (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(100) NOT NULL,
+    content TEXT NOT NULL,
+    writer VARCHAR(50) NOT NULL,
+    filename TEXT NULL,
+    filepath TEXT NULL,
+    edit_password_hash VARCHAR(255) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
