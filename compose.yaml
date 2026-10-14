@@ -4,12 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: board-app-container
-    environment:
-      DB_HOST: ${DB_HOST:-host.docker.internal}
-      DB_PORT: ${DB_PORT:-3306}
-      DB_NAME: ${DB_NAME:-board}
-      DB_USER: ${DB_USER:?Set DB_USER in .env}
-      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    env_file:
+      - ./.env
     volumes:
       - ./src:/var/www/html:ro
       - ./src/uploads:/var/www/html/uploads

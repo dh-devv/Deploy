@@ -4,7 +4,7 @@
 
 PC의 MySQL `board` 데이터베이스를 사용합니다. 컨테이너에서 PC에 접속할 때는 `host.docker.internal`을 사용합니다.
 
-1. `.env.example`을 `.env`로 복사하고 DB 접속 정보를 설정합니다. `.env`와 업로드 파일, 로컬 백업은 Git에서 제외됩니다.
+1. 프로젝트 루트의 `.env`에 DB 접속 정보를 설정합니다. 기존 `.env`가 있으면 그대로 사용하고, 없을 때만 `.env.example`을 복사합니다. Compose는 PHP 컨테이너의 DB 설정을 이 파일에서 직접 읽습니다. `.env`와 업로드 파일, 로컬 백업은 Git에서 제외됩니다.
 2. 새 DB에는 `database/schema.sql`을 적용합니다. 기존 DB에는 먼저 백업한 뒤 `database/migrate.php`를 DB 관리자 계정으로 CLI에서 실행합니다. 이 스크립트는 `board_users` 테이블과 nullable `php_board.user_id` 열을 추가하며 게시글을 삭제하지 않습니다. CLI에는 `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` 환경변수가 필요합니다.
 3. 앱 계정에는 `board_users`의 SELECT·INSERT와 `php_board`의 SELECT·INSERT·UPDATE·DELETE만 부여합니다. DB 관리자 계정은 앱 실행에 사용하지 않습니다.
 4. `docker compose up --build -d`를 실행하고 <http://localhost:8082>에 접속합니다.
