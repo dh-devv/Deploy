@@ -1,73 +1,22 @@
 <?php
-    require_once 'config/configdb.php';
-
-    if (!isset($_GET['id'])) {
-        header("Location: index.php");
-        exit;
-    }
-
-    $id = (int)$_GET['id'];
-
-    $stmt = $pdo->prepare("SELECT * FROM php_board WHERE id = ?");
-    $stmt->execute([$id]);
-    $post = $stmt->fetch();
-
-    if (!$post) {
-        die("존재하지 않는 게시글입니다.");
-    }
-
-    // 현재 첨부된 파일이 이미지인지 확인하는 로직 
-    $isImage = false;
-    if($post['filepath']) {
-        $fileExtension = strtolower(pathinfo($post['filepath'], PATHINFO_EXTENSION));
-        $imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-        if (in_array($fileExtension, $imageExtensions)) {
-            $isImage = true;
-        }
-    }
-
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        $title = trim($_POST['title']);
-        $writer = trim($_POST['writer']);
-        $content = trim($_POST['content']);
-        
-        $filename = $post['filename'];
-        $filepath = $post['filepath'];
-
-        if (isset($_FILES['attached_file']) && $_FILES['attached_file']['error'] === UPLOAD_ERR_OK) {
-            if ($filepath && file_exists(__DIR__ . '/' . $filepath)) {
-                unlink(__DIR__ . '/' . $filepath);
-            }
-            $fileTmpPath = $_FILES['attached_file']['tmp_name'];
-            $originalName = $_FILES['attached_file']['name'];
-            $fileExtension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
-
-            $uuid = sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
-                mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff),
-                mt_rand(0, 0x0fff) | 0x4000, mt_rand(0, 0x3fff) | 0x8000,
-                mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
-            );
-            $newFileName = $uuid . '.' . $fileExtension;
-            $dest_path = __DIR__ . '/uploads/' . $newFileName;
-
-            if(move_uploaded_file($fileTmpPath, $dest_path)) {
-                $filename = $originalName;
-                $filepath = 'uploads/' . $newFileName;
-            }
-        }
-
-        if ($title && $writer && $content) {
-            $stmt = $pdo->prepare("UPDATE php_board SET title = ?, writer = ?, content = ?, filename = ?, filepath = ? WHERE id = ?");
-            $stmt->execute([$title, $writer, $content, $filename, $filepath, $id]);
-            header("Location: index.php");
-            exit;
-        }
-    }
+require_once __DIR__ . '/config/bootstrap.php';
+if (!in_array($_SERVER['REQUEST_METHOD'], ['GET', 'POST'], true)) fail(405, '지원하지 않는 요청입니다.');
+require_once __DIR__ . '/config/configdb.php';
+$user = requireUser($pdo);
+$id = postId($_GET['id'] ?? null);
+$post = findPost($pdo, $id);
+requireOwner($post, $user);
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    mutatePost($pdo, $user, 'update', $id);
+    header('Location: index.php', true, 303);
+    exit;
+}
+$isImage = $post['filepath'] && in_array(strtolower(pathinfo($post['filepath'], PATHINFO_EXTENSION)), ['jpg','jpeg','png','gif','webp'], true);
 ?>
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
     <title>글 수정하기</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; }
@@ -100,31 +49,31 @@
         <h2>게시글 수정</h2>
         <div class="subtitle">내용과 첨부파일을 실시간으로 확인하고 수정하세요.</div>
         
-        <form action="updateboard.php?id=<?= $id ?>" method="POST" enctype="multipart/form-data">
+        <form action="updateboard.php?id=<?= $id ?>" method="POST" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
             <div class="form-group">
                 <label>작성자</label>
-                <input type="text" name="writer" value="<?= htmlspecialchars($post['writer']) ?>" required class="form-control">
+                <input type="text" name="writer" readonly value="<?= e($post['writer']) ?>" required class="form-control">
             </div>
             <div class="form-group">
                 <label>제목</label>
-                <input type="text" name="title" value="<?= htmlspecialchars($post['title']) ?>" required class="form-control">
+                <input type="text" name="title" maxlength="100" value="<?= e($post['title']) ?>" required class="form-control">
             </div>
             <div class="form-group">
                 <label>내용</label>
-                <textarea name="content" rows="5" required class="form-control"><?= htmlspecialchars($post['content']) ?></textarea>
+                <textarea name="content" rows="5" required class="form-control"><?= e($post['content']) ?></textarea>
             </div>
             
             <div class="form-group">
                 <label>첨부파일 교체</label>
-                <input type="file" name="attached_file" class="form-control">
+                <input type="file" name="attached_file" accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt" class="form-control"><small>이미지·PDF·TXT, 최대 2MB</small>
                 
                 <?php if ($post['filename']): ?>
                     <div class="preview-box">
                         <div class="current-file">
-                            📎 현재 파일: <?= htmlspecialchars($post['filename']) ?>
+                            📎 현재 파일: <?= e($post['filename']) ?>
                         </div>
                         <?php if ($isImage): ?>
-                            <img src="<?= htmlspecialchars($post['filepath']) ?>" alt="첨부 이미지 미리보기" class="img-preview">
+                            <img src="<?= e($post['filepath']) ?>" alt="첨부 이미지 미리보기" class="img-preview">
                         <?php endif; ?>
                     </div>
                 <?php endif; ?>

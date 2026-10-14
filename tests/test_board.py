@@ -39,19 +39,27 @@ class Client:
         return response.status, response.read().decode('utf-8', errors='replace')
 
     def token(self):
-        status, page = self.request()
+        status, page = self.request('/auth.php')
         assert status == 200, f'Homepage returned {status}'
         match = re.search(r'name="csrf_token" value="([a-f0-9]+)"', page)
         return match.group(1) if match else ''
+
+    def register(self, username=None):
+        username = username or 'test-' + uuid.uuid4().hex
+        status, page = self.request('/auth.php', dict(action='register', username=username,
+            password='test-password-123', csrf_token=self.token()))
+        assert status == 200, f'Registration returned {status}: {page[:100]}'
+        return username
 
 
 class BoardTests(unittest.TestCase):
     def setUp(self):
         self.client = Client()
+        self.username = self.client.register()
         self.token = self.client.token()
         self.title = 'regression-' + uuid.uuid4().hex
         self.fields = dict(action='create', title=self.title, writer='tester',
-                           content='test content', post_password='test-password-123',
+                           content='test content',
                            csrf_token=self.token)
 
     def create(self, upload=None):
@@ -80,12 +88,12 @@ class BoardTests(unittest.TestCase):
         self.assertEqual(self.client.request('/index.php', self.fields)[0], 422)
 
     def test_empty_fields_rejected(self):
-        self.fields['writer'] = '   '
+        self.fields['content'] = '   '
         self.assertEqual(self.client.request('/index.php', self.fields)[0], 422)
 
     def test_password_required(self):
-        self.fields.pop('post_password')
-        self.assertEqual(self.client.request('/index.php', self.fields)[0], 422)
+        fields = dict(action='register', username='missing-password', csrf_token=self.token)
+        self.assertEqual(self.client.request('/auth.php', fields)[0], 422)
 
     def test_php_upload_rejected(self):
         status, _ = self.client.request('/index.php', self.fields,
@@ -108,17 +116,18 @@ class BoardTests(unittest.TestCase):
     def test_configuration_not_public(self):
         self.assertEqual(self.client.request('/config/configdb.php')[0], 403)
 
-    def test_edit_and_delete_require_password(self):
+    def test_edit_and_delete_require_owner(self):
         post_id, _ = self.create()
         other = Client()
-        fields = dict(self.fields, csrf_token=other.token(), title='unauthorized', post_password='wrong-password')
+        other.register()
+        fields = dict(self.fields, csrf_token=other.token(), title='unauthorized')
         self.assertEqual(other.request(f'/updateboard.php?id={post_id}', fields)[0], 403)
         fields.update(action='delete', id=post_id)
         self.assertEqual(other.request('/index.php', fields)[0], 403)
         status, page = self.client.request()
         self.assertIn(self.title, page)
 
-    def test_edit_then_delete_with_correct_password(self):
+    def test_owner_can_edit_then_delete(self):
         post_id, _ = self.create()
         changed = self.title + '-changed'
         fields = dict(self.fields, title=changed)
@@ -155,6 +164,50 @@ class BoardTests(unittest.TestCase):
 
     def test_missing_post_is_404(self):
         self.assertEqual(self.client.request('/updateboard.php?id=2147483647')[0], 404)
+
+    def test_anonymous_cannot_create(self):
+        guest = Client()
+        fields = dict(self.fields, csrf_token=guest.token())
+        self.assertEqual(guest.request('/index.php', fields)[0], 401)
+
+    def test_writer_spoof_is_ignored(self):
+        self.fields['writer'] = 'impersonated-writer'
+        _, page = self.create()
+        self.assertNotIn('impersonated-writer', page)
+        self.assertIn(self.username, page)
+
+    def test_logout_and_login(self):
+        self.assertEqual(self.client.request('/auth.php', dict(action='logout', csrf_token=self.token))[0], 200)
+        fields = dict(self.fields, csrf_token=self.client.token())
+        self.assertEqual(self.client.request('/index.php', fields)[0], 401)
+        login = dict(action='login', username=self.username, password='incorrect-password', csrf_token=self.client.token())
+        self.assertEqual(self.client.request('/auth.php', login)[0], 401)
+        login['password'] = 'test-password-123'
+        self.assertEqual(self.client.request('/auth.php', login)[0], 200)
+        self.fields['csrf_token'] = self.client.token()
+        self.create()
+
+    def test_duplicate_username_rejected(self):
+        guest = Client()
+        fields = dict(action='register', username=self.username, password='other-password-123', csrf_token=guest.token())
+        self.assertEqual(guest.request('/auth.php', fields)[0], 409)
+
+    def test_previous_token_invalid_after_login(self):
+        fields = dict(self.fields, csrf_token='0' * 64)
+        self.assertEqual(self.client.request('/index.php', fields)[0], 403)
+
+    def test_legacy_posts_not_claimed_by_name(self):
+        other = Client()
+        other.register('legacy_author')
+        self.assertEqual(other.request('/updateboard.php?id=1')[0], 403)
+        fields = dict(action='delete', id='1', csrf_token=other.token())
+        self.assertEqual(other.request('/index.php', fields)[0], 403)
+
+    def test_array_id_rejected(self):
+        self.assertEqual(self.client.request('/updateboard.php?id[]=1')[0], 422)
+
+    def test_unsafe_existing_upload_not_served(self):
+        self.assertEqual(self.client.request('/uploads/123abc.html')[0], 403)
 
 
 if __name__ == '__main__':

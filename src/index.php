@@ -1,73 +1,27 @@
 <?php
-    require_once 'config/configdb.php';
-
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'create') {
-        $title = trim($_POST['title']);
-        $writer = trim($_POST['writer']);
-        $content = trim($_POST['content']);
-
-        $filename = null;
-        $filepath = null;
-
-        if(isset($_FILES['attached_file']) && $_FILES['attached_file']['error'] === UPLOAD_ERR_OK) {
-            $fileTmpPath = $_FILES['attached_file']['tmp_name'];
-            $originalName = $_FILES['attached_file']['name'];
-            $fileExtension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
-
-            $uuid = sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
-                mt_rand(0, 0xffff), mt_rand(0, 0xffff),
-                mt_rand(0, 0xffff),
-                mt_rand(0, 0x0fff) | 0x4000,
-                mt_rand(0, 0x3fff) | 0x8000,
-                mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
-            );
-
-            $newFileName = $uuid . '.' . $fileExtension;
-            $uploadFileDir = __DIR__ . '/uploads/';
-            $dest_path = $uploadFileDir . $newFileName;
-
-            if (!is_dir($uploadFileDir)) {
-                mkdir($uploadFileDir, 0777, true);
-            }
-
-            if(move_uploaded_file($fileTmpPath, $dest_path)) {
-                $filename = $originalName;
-                $filepath = 'uploads/' . $newFileName;
-            }
-        }
-
-        if ($title && $writer && $content) {
-            $stmt = $pdo->prepare("INSERT INTO php_board (title, writer, content, filename, filepath) VALUES (?, ?, ?, ?, ?)");
-            $stmt->execute([$title, $writer, $content, $filename, $filepath]);
-            header("Location: index.php");
-            exit;
-        }
-    }
-
-    if (isset($_GET['delete'])) {
-        $id = (int)$_GET['delete'];
-
-        $stmt = $pdo->prepare("SELECT filepath FROM php_board WHERE id = ?");
-        $stmt->execute([$id]);
-        $post = $stmt->fetch();
-
-        if ($post && $post['filepath'] && file_exists(__DIR__ . '/' . $post['filepath'])) {
-            unlink(__DIR__ . '/' . $post['filepath']); 
-        }
-
-        $stmt = $pdo->prepare("DELETE FROM php_board WHERE id = ?");
-        $stmt->execute([$id]);
-        header("Location: index.php");
-        exit;
-    }
-
-    $stmt = $pdo->query("SELECT * FROM php_board ORDER BY id DESC");
-    $posts = $stmt->fetchAll();
+require_once __DIR__ . '/config/bootstrap.php';
+if (isset($_GET['delete'])) {
+    header('Allow: POST');
+    fail(405, '삭제는 POST 요청으로만 가능합니다.');
+}
+if (!in_array($_SERVER['REQUEST_METHOD'], ['GET', 'POST'], true)) fail(405, '지원하지 않는 요청입니다.');
+require_once __DIR__ . '/config/configdb.php';
+$user = currentUser($pdo);
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+    if (!in_array($action, ['create', 'delete'], true)) fail(422, '잘못된 요청입니다.');
+    $user = requireUser($pdo);
+    $id = $action === 'delete' ? postId($_POST['id'] ?? null) : null;
+    mutatePost($pdo, $user, $action, $id);
+    header('Location: index.php', true, 303);
+    exit;
+}
+$posts = $pdo->query('SELECT id, title, writer, content, filename, filepath, user_id, created_at FROM php_board ORDER BY id DESC')->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
     <title>리눅스게시판실습</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; }
@@ -108,20 +62,30 @@
     <div class="container">
         <header>
             <h1>자유게시판</h1>
+            <?php if ($user): ?>
+                <p><?= e($user['username']) ?>님</p>
+                <form method="POST" action="auth.php" style="margin-top:12px">
+                    <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
+                    <input type="hidden" name="action" value="logout">
+                    <button type="submit">로그아웃</button>
+                </form>
+            <?php else: ?>
+                <p><a href="auth.php">로그인</a> · <a href="auth.php?mode=register">회원가입</a></p>
+            <?php endif; ?>
         </header>
 
         <div class="main-grid">
             <div class="card">
                 <div class="card-title">작성하기</div>
-                <form action="index.php" method="POST" enctype="multipart/form-data">
-                    <input type="hidden" name="action" value="create">
+                <?php if ($user): ?><form action="index.php" method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="action" value="create"><input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
                     <div class="form-group">
                         <label>작성자</label>
-                        <input type="text" name="writer" required class="form-control">
+                        <input type="text" name="writer" value="<?= e($user['username']) ?>" readonly class="form-control">
                     </div>
                     <div class="form-group">
                         <label>제목</label>
-                        <input type="text" name="title" required class="form-control">
+                        <input type="text" name="title" maxlength="100" required class="form-control">
                     </div>
                     <div class="form-group">
                         <label>내용</label>
@@ -129,10 +93,10 @@
                     </div>
                     <div class="form-group">
                         <label>첨부파일</label>
-                        <input type="file" name="attached_file" class="form-control">
+                        <input type="file" name="attached_file" accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt" class="form-control"><small>이미지·PDF·TXT, 최대 2MB</small>
                     </div>
                     <button type="submit" class="btn">등록하기</button>
-                </form>
+                </form><?php else: ?><p>글을 작성하려면 <a href="auth.php">로그인</a>하세요.</p><?php endif; ?>
             </div>
 
             <div>
@@ -144,15 +108,15 @@
                     <?php foreach ($posts as $post): ?>
                         <div class="post-card">
                             <div class="post-header">
-                                <div class="post-title"><?= htmlspecialchars($post['title']) ?></div>
-                                <div class="post-writer"><?= htmlspecialchars($post['writer']) ?></div>
+                                <div class="post-title"><?= e($post['title']) ?></div>
+                                <div class="post-writer"><?= e($post['writer']) ?></div>
                             </div>
-                            <div class="post-body"><?= htmlspecialchars($post['content']) ?></div>
+                            <div class="post-body"><?= e($post['content']) ?></div>
                             
                             <?php if ($post['filename'] && $post['filepath']): ?>
                                 <div class="file-box">
-                                    첨부파일: <a href="<?= htmlspecialchars($post['filepath']) ?>" download="<?= htmlspecialchars($post['filename']) ?>" class="file-link">
-                                        <?= htmlspecialchars($post['filename']) ?>
+                                    첨부파일: <a href="<?= e($post['filepath']) ?>" download="<?= e($post['filename']) ?>" class="file-link">
+                                        <?= e($post['filename']) ?>
                                     </a>
                                 </div>
                             <?php endif; ?>
@@ -160,8 +124,15 @@
                             <div class="post-footer">
                                 <div><?= $post['created_at'] ?></div>
                                 <div class="post-actions">
-                                    <a href="updateboard.php?id=<?= $post['id'] ?>" class="action-edit">수정</a>
-                                    <a href="index.php?delete=<?= $post['id'] ?>" onclick="return confirm('삭제하시겠습니까?')" class="action-delete">삭제</a>
+                                    <?php if ($user && $post['user_id'] !== null && (int)$post['user_id'] === (int)$user['id']): ?>
+                                    <a href="updateboard.php?id=<?= (int)$post['id'] ?>" class="action-edit">수정</a>
+                                    <form method="POST" action="index.php" style="display:inline" onsubmit="return confirm('삭제하시겠습니까?')">
+                                        <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
+                                        <input type="hidden" name="action" value="delete">
+                                        <input type="hidden" name="id" value="<?= (int)$post['id'] ?>">
+                                        <button type="submit" class="action-delete">삭제</button>
+                                    </form>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>

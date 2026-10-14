@@ -10,6 +10,7 @@ services:
       - /var/lib/mysql
     volumes:
       - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+      - ./tests/fixtures.sql:/docker-entrypoint-initdb.d/test-fixtures.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
       interval: 2s
@@ -24,7 +25,7 @@ services:
       DB_USER: board_test
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.test}
     volumes:
-      - ${BOARD_SOURCE:-./src}:/var/www/html
+      - ${BOARD_SOURCE:-./src}:/var/www/html:ro
       - ./.local-tests/uploads:/var/www/html/uploads
     depends_on:
       db:
