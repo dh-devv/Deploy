@@ -14,10 +14,11 @@
     // $dbname = 'board';
     // $username = 'root';
     // $password = 'bdh841012*';
+    
     // 실서버용
     $host = '127.0.0.1';
     $port = '3306';
-    $dbname = 'php-board';
+    $dbname = 'board';
     $username = 'dh';
     $password = 'bdh841012*';
 
