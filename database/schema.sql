@@ -1,3 +1,10 @@
+CREATE TABLE IF NOT EXISTS board_users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS php_board (
     id INT AUTO_INCREMENT PRIMARY KEY,
     title VARCHAR(100) NOT NULL,
@@ -5,6 +12,7 @@ CREATE TABLE IF NOT EXISTS php_board (
     writer VARCHAR(50) NOT NULL,
     filename TEXT NULL,
     filepath TEXT NULL,
-    edit_password_hash VARCHAR(255) NULL,
+    user_id INT NULL,
+    INDEX idx_php_board_user_id (user_id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

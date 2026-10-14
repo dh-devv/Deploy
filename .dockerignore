@@ -1,0 +1,8 @@
+.git
+.env
+.env.*
+.local-tests
+.local-backups
+php-board
+tests
+src/uploads/*
