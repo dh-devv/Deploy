@@ -14,11 +14,10 @@ COMPOSE = ['docker', 'compose', '--env-file', '.env.test', '-f', 'compose.test.y
 
 def main():
     os.chdir(ROOT)
-    (ROOT / '.local-tests' / 'uploads').mkdir(parents=True, exist_ok=True)
     (ROOT / '.env.test').write_text(
         f'DB_PASSWORD={secrets.token_hex(24)}\nTEST_ROOT_PASSWORD={secrets.token_hex(24)}\n', encoding='utf-8')
     try:
-        subprocess.run(COMPOSE + ['down'], check=True)
+        subprocess.run(COMPOSE + ['down', '--volumes'], check=True)
         subprocess.run(COMPOSE + ['up', '--build', '-d'], check=True)
         for attempt in range(40):
             try:
@@ -32,7 +31,7 @@ def main():
         env = dict(os.environ, BOARD_TEST_URL='http://127.0.0.1:18082')
         return subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-v'], env=env).returncode
     finally:
-        subprocess.run(COMPOSE + ['down'], check=True)
+        subprocess.run(COMPOSE + ['down', '--volumes'], check=True)
 
 
 if __name__ == '__main__':

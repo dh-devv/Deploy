@@ -15,7 +15,51 @@ PC의 MySQL `board` 데이터베이스를 사용합니다. 컨테이너에서 PC
 
 이미지(JPG·PNG·GIF·WebP), PDF, TXT만 최대 2MB까지 첨부할 수 있습니다. 파일 교체 실패 시 기존 첨부파일을 보존하며, 업로드 폴더에서는 PHP가 실행되지 않습니다.
 
-현재 포트는 로컬 PC에서만 접속할 수 있게 바인딩되어 있습니다. 서버 배포 시에는 HTTPS 프록시와 운영 DB 주소를 설정하세요. 코드에 있던 비밀번호는 과거 Git 커밋에 남아 있으므로 공유된 자격증명은 DB 관리자가 변경해야 합니다.
+기본 포트는 로컬 PC에서만 접속할 수 있게 바인딩되어 있습니다. `HTTP_BIND`로 접속 인터페이스를 지정할 수 있습니다. 서버 배포 시에는 HTTPS 프록시와 운영 DB 주소를 설정하세요. 코드에 있던 비밀번호는 과거 Git 커밋에 남아 있으므로 공유된 자격증명은 DB 관리자가 변경해야 합니다.
+
+## VMware Linux VM에 배포하기
+
+MySQL이 VM의 Linux에 직접 설치되어 있고, PHP·Nginx는 그 VM의 Docker에서 실행되는 구성입니다. Windows PC의 `.env`, MySQL 계정과 DB 변경은 VM으로 자동 복사되지 않습니다.
+
+VM 터미널에서 다음을 실행합니다.
+
+```bash
+cd /var/www/html/Deploy
+test -f .env || cp .env.example .env
+nano .env
+chmod 600 .env
+```
+
+`.env`에는 VM MySQL에서 사용할 실제 계정과 비밀번호를 입력하고 아래 주소·포트를 설정합니다. 예시의 자리표시자를 실제 값으로 바꿔야 합니다.
+
+```dotenv
+DB_HOST=host.docker.internal
+DB_PORT=3306
+DB_NAME=board
+DB_USER=VM_MYSQL_APP_USER
+DB_PASSWORD=VM_MYSQL_APP_PASSWORD
+HTTP_BIND=0.0.0.0
+HTTP_PORT=8082
+```
+
+`host.docker.internal`은 Compose의 `host-gateway` 설정을 통해 **VM의 Docker 호스트**를 가리킵니다. 컨테이너 안의 `127.0.0.1`은 PHP 컨테이너 자신이므로 VM MySQL의 주소로 사용할 수 없습니다.
+
+MySQL이 VM의 `127.0.0.1:3306`에서만 수신하면 Docker에서 연결할 수 없습니다. VM에서 `sudo ss -lntp '( sport = :3306 )'`로 확인하고, MySQL이 Docker 호스트 게이트웨이 주소에서도 수신하도록 설정해야 합니다. 앱 계정에도 Docker 네트워크에서 접속할 권한이 필요합니다. 3306 포트는 Docker 내부에서 접근할 수 있게 제한하세요.
+
+VM의 기존 `board` 데이터베이스를 백업한 다음 로그인 스키마를 별도로 마이그레이션해야 합니다. 로컬 Windows에서 수행한 마이그레이션은 VM에 적용되지 않습니다. 위 로컬 실행 절차의 `database/migrate.php` 또는 `database/schema.sql` 설명을 따르세요.
+
+Linux의 업로드 폴더에는 PHP 사용자(UID 33)의 쓰기 권한과 Nginx 사용자의 읽기 권한이 필요합니다. 다음 명령은 업로드 폴더에만 적용합니다.
+
+```bash
+sudo mkdir -p src/uploads
+sudo chown -R 33:33 src/uploads
+sudo find src/uploads -type d -exec chmod 755 {} +
+sudo find src/uploads -type f -exec chmod 644 {} +
+docker compose up --build -d
+hostname -I
+```
+
+Windows 브라우저에서는 `http://VM의_IP:8082`로 접속합니다. VMware가 NAT 방식이면 같은 PC에서는 VM IP로 접속하고, 다른 기기에서 접속할 때는 VMware 포트 전달 또는 브리지 네트워크 설정이 필요합니다. VM 방화벽에서도 필요한 접속 범위에 8082 포트를 허용하세요.
 
 ## 검증
 
@@ -25,6 +69,6 @@ Docker와 Python이 설치된 PowerShell에서 실행합니다.
 python tests/run.py
 ```
 
-PC MySQL과 분리된 Docker MySQL DB와 `18082` 포트를 사용합니다. 테스트 DB는 메모리에 생성되며 종료 시 제거됩니다. 테스트 업로드는 `.local-tests/uploads`에만 저장됩니다.
+PC·VM MySQL과 분리된 Docker MySQL DB와 `18082` 포트를 사용합니다. 테스트 DB는 메모리에 생성되며 종료 시 제거됩니다. 테스트 업로드는 Linux 권한을 검증하기 위해 Docker 전용 볼륨에 저장되고 종료 시 제거됩니다.
 
 `php-board/`는 별도 Git 저장소이므로 현재 프로젝트에서 제외했습니다. 실제 앱 코드를 커밋·push할 때는 이 README가 있는 프로젝트 루트에서 실행하세요.

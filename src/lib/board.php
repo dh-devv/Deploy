@@ -96,12 +96,17 @@ function saveUpload(?array $file): ?array
     if ($mime !== $allowed[$extension]) fail(422, '파일 확장자와 실제 형식이 일치하지 않습니다.');
     if (str_starts_with($mime, 'image/') && @getimagesize($file['tmp_name']) === false) fail(422, '올바른 이미지 파일이 아닙니다.');
     $directory = dirname(__DIR__) . '/uploads';
-    if (!is_dir($directory) && !mkdir($directory, 0750, true) && !is_dir($directory)) {
+    if (!is_dir($directory) && !mkdir($directory, 0755, true) && !is_dir($directory)) {
         throw new RuntimeException('Cannot create upload directory.');
     }
     $path = 'uploads/' . bin2hex(random_bytes(16)) . '.' . $extension;
     if (!move_uploaded_file($file['tmp_name'], dirname(__DIR__) . '/' . $path)) {
         throw new RuntimeException('Cannot save uploaded file.');
+    }
+    // PHP and nginx run as different users in separate Linux containers.
+    if (!chmod(dirname(__DIR__) . '/' . $path, 0644)) {
+        removeAttachment($path);
+        throw new RuntimeException('Cannot set attachment read permissions.');
     }
     return ['filename'=>$name, 'filepath'=>$path];
 }
