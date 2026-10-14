@@ -9,17 +9,17 @@
     $username = 'root';
     $password = 'bdh841012*';
     */
-    $host = 'host.docker.internal';
-    $port = '3306';
-    $dbname = 'board';
-    $username = 'root';
-    $password = 'bdh841012*';
-    // 실서버용
-    // $host = '127.0.0.1';
+    // $host = 'host.docker.internal';
     // $port = '3306';
-    // $dbname = '';
-    // $username = 'dh';
+    // $dbname = 'board';
+    // $username = 'root';
     // $password = 'bdh841012*';
+    // 실서버용
+    $host = '127.0.0.1';
+    $port = '3306';
+    $dbname = '';
+    $username = 'dh';
+    $password = 'bdh841012*';
 
     try {
         $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4";
