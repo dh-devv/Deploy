@@ -69,6 +69,8 @@ Docker와 Python이 설치된 PowerShell에서 실행합니다.
 python tests/run.py
 ```
 
-PC·VM MySQL과 분리된 Docker MySQL DB와 `18082` 포트를 사용합니다. 테스트 DB는 메모리에 생성되며 종료 시 제거됩니다. 테스트 업로드는 Linux 권한을 검증하기 위해 Docker 전용 볼륨에 저장되고 종료 시 제거됩니다.
+PC·VM DB와 분리된 Docker MariaDB 10.11과 `18082` 포트를 사용합니다. 테스트 DB는 메모리에 생성되며 종료 시 제거됩니다. 테스트 업로드는 Linux 권한을 검증하기 위해 Docker 전용 볼륨에 저장되고 종료 시 제거됩니다.
+
+확인된 Debian VM에서 `Host '172.18.0.2' is not allowed` 오류를 복구할 때는 root 터미널에서 `bash scripts/repair-vm.sh`를 실행합니다. 기존 `board` DB와 `.env`를 `.local-backups`에 백업하고, 로그인 스키마를 보완한 다음 Docker 네트워크 전용 앱 계정을 새로 생성하여 `.env`에 저장합니다. 게시글과 기존 DB 계정은 삭제하지 않습니다. 이 스크립트는 확인된 Docker 네트워크 `172.18.0.0/16`과 이미 적용한 MariaDB 수신 설정을 전제로 합니다.
 
 `php-board/`는 별도 Git 저장소이므로 현재 프로젝트에서 제외했습니다. 실제 앱 코드를 커밋·push할 때는 이 README가 있는 프로젝트 루트에서 실행하세요.

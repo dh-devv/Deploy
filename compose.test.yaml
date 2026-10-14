@@ -1,18 +1,18 @@
 services:
   db:
-    image: mysql:8.0
+    image: mariadb:10.11
     environment:
-      MYSQL_DATABASE: board_test
-      MYSQL_USER: board_test
-      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.test}
-      MYSQL_ROOT_PASSWORD: ${TEST_ROOT_PASSWORD:?Set TEST_ROOT_PASSWORD in .env.test}
+      MARIADB_DATABASE: board_test
+      MARIADB_USER: board_test
+      MARIADB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.test}
+      MARIADB_ROOT_PASSWORD: ${TEST_ROOT_PASSWORD:?Set TEST_ROOT_PASSWORD in .env.test}
     tmpfs:
       - /var/lib/mysql
     volumes:
       - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
       - ./tests/fixtures.sql:/docker-entrypoint-initdb.d/test-fixtures.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -uroot -p$$MARIADB_ROOT_PASSWORD --silent"]
       interval: 2s
       timeout: 3s
       retries: 60
